@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.guo.mybatis.mapper.UserMapper">
+	
+	<!-- 开启本mapper的namespace的二级缓存
+	type:指定cache接口的实现类的类型，mybatis默认使用PerpetualCache
+	要和ehcache进行整合，需要配置type为ehcache实现cache接口的类型
+	 -->
+	<cache type="org.mybatis.caches.ehcache.EhcacheCache"/>
+	
+	
+	<!-- 定义SQL片段 
+		id:sql片段的唯一标识
+		经验:都是基于单表来定义，这样可重用性才高。
+		sql片段中不要包含where标签。
+	-->
+	
+	<sql id="query_user_where">
+		<if test="userCustom != null">
+			<if test="userCustom.email != null and userCustom.email != ''">
+				and email = #{userCustom.email}
+			</if>
+			
+			<if test="userCustom.username != null and userCustom.username != ''">
+				and username like '%${userCustom.username}%'
+			</if>
+			
+			<!-- 使用foreach便利传入的id 
+				collection：指定输入对象中的集合属性
+				item:每个遍历生成的的对象
+				open:开始遍历时拼接的串
+				close:结束遍历时拼接的串
+				separator：遍历2个对象过程中需要拼接的串。
+				
+				实现的效果：
+				AND (id=1 or id=2 or id = 10)
+			-->
+			<!-- <foreach collection="ids" item="user_id" open="AND (" close=")" separator=" OR">
+				id=#{user_id}
+			</foreach> -->
+			
+			<!-- 实现 id  In(1,10,16) -->
+			
+			<foreach collection="ids" item="user_id" open="AND id in (" close=")" separator=" ,">
+				#{user_id}
+			</foreach>
+			
+		</if>
+	</sql>
+	
+	<!-- 定义一个resultMap 
+	将select SELECT id id_, username username FROM t_user 和User类中的属性做一个映射关系
+	type:resultMap最终映射的java对象类型	可以使用别名
+	id:对resultMap的唯一标识。
+		
+	 -->
+	<resultMap type="user" id="userResultMap">
+		<!-- 
+			id:表示查询结果集中的唯一标识
+			column:查询出来的列名。
+			property:type指定的pojo类型中的属性名
+			最终resultMap对 column和property做一个映射关系(对应关系)。
+		-->
+		<id column="id_" property="id"/>
+		
+		<!--  
+			result:对普通名映射定义
+			column:查询出来的列名。
+			property:type指定的pojo类型中的属性名
+			终resultMap对 column和property做一个映射关系(对应关系)。
+		-->
+		<result column="username_" property="userName"/>
+	</resultMap>
+	
+	<!-- 用户信息综合查询 -->
+	<select id="findUserList" parameterType="org.guo.mybatis.modle.UserQueryVo" resultType="org.guo.mybatis.modle.UserCustom">
+		select * from t_user
+		<where>
+			<!-- id:引用sql片段的id 当sql片段不在本mapper文件中，需要前面加namespace -->
+			<include refid="query_user_where"/>
+			<!-- 在这里还要引用其他sql片段。 -->
+		</where>
+	</select>
+	
+	<!-- 返回简单类型 -->
+	<select id="findUserCount" parameterType="org.guo.mybatis.modle.UserQueryVo" resultType="int">
+		select count(*) from t_user
+		
+		<where>
+			<!-- id:引用sql片段的id 当sql片段不在本mapper文件中，需要前面加namespace -->
+			<include refid="query_user_where"/>
+			<!-- 在这里还要引用其他sql片段。 -->
+		</where>
+		
+	</select>
+
+	<!-- 根据用户ID(主键) 查询用户信息 -->
+	<!-- #{} 代表一个占位符 -->
+	<!-- #{id}中的id表示接受输入的参数，id就是参数名称，当参数类型为简单类型时， #{ }中的参数名可以是value或者其他名称都可以。-->
+	<!-- resultType 指定sql输出结果所映射的java对象类型，select 指定resultType表示将单条记录映射为java对象。  -->
+	<!-- parameterType 负责参数的输入类型   而  resultType 负责结果的输出  -->
+	<select id="findUserById" parameterType="int" resultType="user" >
+		select * from t_user where id = #{id};
+	</select>
+	
+	<select id="findUserByIdResultMap" parameterType="int" resultMap="userResultMap">
+		select id id_, username username_ FROM t_user where id = #{value};
+	</select>
+	
+	
+	<!-- 根据用户名称模糊查询用户信息，可能返回多条 
+		resultType:指定的就是单条记录所映射的java对象类型，所以无论是findUserById里面的查询一条，还是此处的查询多条，都是User
+		${}表示拼接sql串，将接收到的内容不加任何修饰的拼接在SQL中。${}跟 #{}一样可以接收简单类型、pojo,hashmap等，但当接收的为
+		简单类型时，${}中只能写为value 这一点注意 跟#{}的区别。
+		
+		使用${}拼接sql 会有sql注入风险。
+	-->
+	<select id="findUserByName" parameterType="java.lang.String" resultType="org.guo.mybatis.modle.User">
+		select * from t_user where username like '%${value}%';
+	</select>
+	
+	<!-- 
+		paramterType:指定输入参数类型 pojo 包括用户信息。
+		#{}中指定pojo的属性名，接收到pojo对象的属性值，myBatis通过OGNL获取对象的属性值。
+	 -->
+	<insert id="insertUser" parameterType="org.guo.mybatis.modle.User">
+		<!-- 
+			自增型主键：
+			将插入数据的主键返回到user对象中。
+			select LAST_INSERT_ID();  得到insert进去的主键的值，只适用于自增主键
+			
+			keyProperty:将查询到主键值设置到parameterType指定对象的哪个属性值
+			order:select LAST_INSERT_ID()的执行顺序，相对于insert语句来说它的执行顺序
+			resultType：指定select LAST_INSERT_ID()的结果类型。
+		 -->
+		<selectKey keyProperty="id" order="AFTER" resultType="java.lang.Integer">
+			select LAST_INSERT_ID(); 
+		</selectKey>
+		
+		<!-- 
+		使用 mysql的 select uuid(); 生成主键。注意： 需要修改主键为String 长度要能匹配生成的长度。
+		执行思路：
+			首先通过select uuid();生成主键,将主键设置到user对象的id属性中
+			其次在insert执行时，用user对象中取出id属性值。
+		
+		如果使用oracle的序列生成主键，只需要将如下的 select uuid() 更换为 Oracle数据库的 查询序列 (类似：select nextVal()) 即可。
+		 -->
+		<!-- 
+		<selectKey keyProperty="id" order="BEFORE" resultType="java.lang.String">
+			 select uuid();
+		</selectKey> -->
+		
+		insert into t_user(id,userName,password,email,inTime) value (#{id},#{userName},#{password},#{email},#{inTime});
+	</insert>
+	
+	<!-- 
+		根据id删除用户信息，需要输入id值。
+	 -->
+	<delete id="deleteUser" parameterType="java.lang.Integer">
+		delete from t_user where id = #{id}
+	</delete>
+	
+	<!-- 
+	分析:
+	需要传入用户的id
+	需要传入用户的更新信息
+	parameterType 指定user对象，包含id和要更新的信息。 注意：id必须存在
+	#{id}从对象属性中获取值。
+	 -->
+	<update id="updateUser" parameterType="org.guo.mybatis.modle.User">
+		update t_user set username=#{userName},password=#{password},email=#{email},intime=#{inTime}
+		where id = #{id}
+	</update>
+		
+</mapper>

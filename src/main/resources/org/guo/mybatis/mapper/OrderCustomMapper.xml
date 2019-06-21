@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.guo.mybatis.mapper.OrderCustomMapper">
+
+	<!-- 订单关联查询用户的resultMap 
+		将整个查询结果映射到org.guo.mybatis.modle.Order中
+	-->
+	<resultMap type="org.guo.mybatis.modle.Order" id="OrderUserResultMap">
+		<!-- 配置映射的订单信息 -->
+		<!-- 指定查询列中的唯一标识，订单信息中的唯一标识，如果有多个列组成唯一标识，配置多个id -->
+		<id column="id" property="id"/>
+		<result column="user_id" property="userId"/>
+		<result column="number" property="number"/>
+		<result column="createtime" property="createtime"/>
+		<result column="note" property="note"/>
+		
+		<!-- 配置映射的用户信息-->
+		<!-- association用于映射关联查询单个对象的信息。 
+		property:要将关联查询的用户信息映射到order中的哪个属性。
+		-->
+		<association property="user" javaType="org.guo.mybatis.modle.User">
+		<!-- id：关联查询用户的唯一标识
+		 column：指定唯一标识用户信息的列
+		 property:映射到user的哪个属性
+		 -->
+			<id column="userId" property="id"/>
+			<result column="username" property="userName"/>
+			<result column="password" property="password"/>
+			<result column="email" property="email"/>
+			<result column="inTime" property="inTime"/>
+		</association>
+		
+	</resultMap>
+	
+	<!-- 订单及订单明细的resultMap
+	使用extends继承，不用再配置订单信息和用户信息的映射
+	-->
+	<resultMap type="org.guo.mybatis.modle.Order" id="OrderAndOrderDetailResultMap" extends="OrderUserResultMap">
+		<!-- 订单信息 -->
+		<!-- 用户信息 -->
+		<!-- 使用extends继承，不用在中配置订单信息和用户信息的映射 -->
+		
+		<!-- 订单明细信息
+		一个订单关联出了多条明细信息，要使用collection进行映射。
+		collection：对关联查询到的多条记录映射到集合对象中。
+		property:将关联查询到多条记录映射到cn.itcast.mybatis.po.Orders哪个属性
+		ofType：指定映射到list集合属性中pojo的类型
+		 -->
+		<collection property="orderDetails" ofType="org.guo.mybatis.modle.OrderDetail">
+			<!-- id:订单明细的唯一标识 -->
+			<!-- column:订单明细信息的唯一标识 
+			property:唯一标识映射到org.guo.mybatis.modle.OrderDetail的哪个属性上。
+			-->
+			<id column="orderdetail_id" property="id"/>
+			<result column="item_id" property="itemId"/>
+			<result column="item_num" property="itemNum"/>
+			<result column="order_id" property="orderId"/>
+		</collection>
+		
+	</resultMap>
+	
+	<!-- 查询用户及购买的商品明细 -->
+	<resultMap type="org.guo.mybatis.modle.User" id="UserAndItemsResultMap">
+		<!-- 用户信息 
+		user_id:此查询中代表用户的唯一标识
+		-->
+		<id column="user_id" property="id"/>
+		<result column="username" property="userName"/>
+		<result column="password" property="password"/>
+		<result column="email" property="email"/>
+		<result column="inTime" property="inTime"/>
+		
+		<!-- 用户购买的订单信息 
+			一个用户对应多个订单。所以用collection 而不是association
+		-->
+		<collection property="orderList" ofType="org.guo.mybatis.modle.Order">
+			<id column="id" property="id"/>
+			<result column="user_id" property="userId"/>
+			<result column="number" property="number"/>
+			<result column="createtime" property="createtime"/>
+			<result column="note" property="note"/>
+			
+			<!-- 订单明细
+				一个订单，包含多个订单明细，所以要写到订单collection的里面
+			 -->
+			 <collection property="orderDetails" ofType="org.guo.mybatis.modle.OrderDetail">
+			 	<id column="orderdetail_id" property="id"/>
+			 	<result column="item_id" property="itemId"/>
+				<result column="item_num" property="itemNum"/>
+				<result column="order_id" property="orderId"/>
+				<!-- 商品信息
+					一个订单明细对应一个商品信息，需在此Collection中使用association
+				 -->
+				 <association property="item" javaType="org.guo.mybatis.modle.Item">
+				 	<id column="item_id" property="id"/>
+				 	<result column="item_name" property="name"/>
+				 	<result column="item_price" property="price"/>
+				 	<result column="itme_detail" property="detail"/>
+				 </association>
+			 </collection>
+		</collection>
+		
+	</resultMap>
+
+	<!-- 查询订单关联查询用户 -->
+	<select id="findOrderUser" resultType="org.guo.mybatis.modle.OrderCustom">
+		SELECT
+		  t_order.*,
+		  t_user.username,
+		  t_user.email,
+		  t_user.password
+		FROM
+		  t_order,
+		  t_user
+		WHERE t_order.`user_id` = t_user.`id`
+	</select>
+	
+	<!-- 查询订单关联查询用户，使用resultMap -->
+	<select id="findOrderUserResultMap" resultMap="OrderUserResultMap">
+		SELECT
+		  t_order.*,
+		  t_user.username,
+		  t_user.email,
+		  t_user.password
+		FROM
+		  t_order,
+		  t_user
+		WHERE t_order.`user_id` = t_user.`id`
+	</select>
+	
+	<!-- 查询用户及关联的商品信息，使用resultMap -->
+	<select id="findUserAndItemsResultMap" resultMap="UserAndItemsResultMap">
+		SELECT
+		  t_order.*,
+		  t_user.username,
+		  t_user.email,
+		  t_user.password,
+		  t_orderdetail.id orderdetail_id,
+		  t_orderdetail.item_id,
+		  t_orderdetail.item_num,
+		  t_orderdetail.order_id,
+		  t_item.name item_name,
+		  t_item.price item_price,
+		  t_item.detail itme_detail
+		FROM
+		  t_order,
+		  t_user,
+		  t_orderdetail,
+		  t_item
+		WHERE t_order.user_id = t_user.id
+		  AND t_order.id = t_orderdetail.order_id
+		  AND t_orderdetail.item_id = t_item.id
+	</select>
+	
+	<!-- 延迟加载的resultMap -->
+	<resultMap type="org.guo.mybatis.modle.Order" id="OrderUserLazyLoadingResultMap">
+		<!-- 对订单信息进行的映射配置 -->
+		<id column="id" property="id"/>
+		<result column="user_id" property="userId"/>
+		<result column="number" property="number"/>
+		<result column="createtime" property="createtime"/>
+		<result column="note" property="note"/>
+		
+		<!--实现对用户信息进行延迟加载 
+		select：指定延迟加载需要执行的statement的id（是根据user_id查询用户信息的statement）
+		要使用userMapper.xml中findUserById完成根据用户id(user_id)用户信息的查询，如果findUserById不在本mapper中需要前边加namespace
+		column：订单信息中关联用户信息查询的列，是id (可以理解为用订单表里的哪个字段去填充查询用户信息的#id参数)
+		
+		关联查询的sql理解为：
+		SELECT t_order.*,(SELECT username FROM t_user WHERE t_order.user_id = t_user.id) username
+		FROM t_order
+		-->
+		<association property="user" javaType="org.guo.mybatis.modle.User" select="org.guo.mybatis.mapper.UserMapper.findUserById" column="user_id">
+		
+		</association>
+		
+	</resultMap>
+	
+	<!-- 查询订单关联查询用户，用户信息需要延迟加载 -->
+	<select id="findOrderUserLazyLoading" resultMap="OrderUserLazyLoadingResultMap">
+		SELECT * FROM t_order
+	</select>
+	
+</mapper>
